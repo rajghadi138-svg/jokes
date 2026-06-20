@@ -186,8 +186,21 @@ class DispatcherCog(commands.Cog):
                 return
 
         channel = self.bot.get_channel(cfg["channel_id"]) if cfg["channel_id"] else None
+        if channel is None and cfg["channel_id"]:
+            # Not in cache — resolve it directly via the API. Catches cache-timing
+            # issues, and gives a clearer reason when it genuinely can't be reached.
+            try:
+                channel = await self.bot.fetch_channel(cfg["channel_id"])
+            except discord.NotFound:
+                self._error = ("channel ID not found — double-check the ID, and make "
+                               "sure this account is a member of that server")
+            except discord.Forbidden:
+                self._error = "no access to that channel — this account can't view it"
+            except discord.HTTPException as e:
+                self._error = f"couldn't resolve channel: {e}"
         if channel is None:
-            self._error = "channel not found — check the channel ID / bot access"
+            if not self._error:
+                self._error = "channel not found — set a valid channel ID"
             cfg["running"] = False
             write_config(cfg)
             self.push_status()
