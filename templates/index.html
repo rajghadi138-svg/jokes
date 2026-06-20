@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
+<title>Dispatcher</title>
+<style>
+  :root{
+    --bg:#0e0f13; --panel:#161821; --panel-2:#1d2030; --line:#2a2e44;
+    --ink:#e7e9f3; --mut:#8a8fb0; --acc:#9d7bff; --ok:#5ee2a0; --bad:#ff6b81;
+    --warn:#ffb454; --font:'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 var(--font)}
+  a{color:var(--acc)}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 22px 80px}
+  h1{font-size:22px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 4px}
+  h1 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:10px;vertical-align:middle;box-shadow:0 0 8px var(--bad)}
+  h1 .dot.on{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+  .sub{color:var(--mut);margin-bottom:24px}
+  .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+  .card h2{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);margin:0 0 14px}
+  label{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin:10px 0 6px}
+  input[type=text],input[type=number],select,textarea{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    padding:9px 11px;border-radius:7px;font:13px var(--font);outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--acc)}
+  textarea{min-height:240px;resize:vertical;font-size:12px}
+  .row{display:flex;gap:10px}
+  .row > *{flex:1}
+  button{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    padding:9px 14px;border-radius:7px;font:12px/1 var(--font);letter-spacing:.1em;
+    text-transform:uppercase;cursor:pointer;transition:background .15s,border-color .15s,transform .05s}
+  button:hover{border-color:var(--acc)}
+  button:active{transform:translateY(1px)}
+  button.primary{background:var(--acc);border-color:var(--acc);color:#0c0a1a;font-weight:700}
+  button.danger{color:var(--bad);border-color:#3a2230}
+  button.ok{color:var(--ok);border-color:#1f3a31}
+  .pill{display:inline-block;padding:3px 9px;border:1px solid var(--line);border-radius:99px;font-size:11px;color:var(--mut);margin-right:6px}
+  .pill.on{color:var(--ok);border-color:#1f3a31}
+  .pill.bad{color:var(--bad);border-color:#3a2230}
+  .files{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:7px;padding:6px;background:var(--panel-2)}
+  .file{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:5px;cursor:pointer}
+  .file:hover{background:#22253a}
+  .file.active{background:#2a224b;color:#dcd2ff}
+  .file small{color:var(--mut)}
+  .feed{max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel-2);font-size:12px}
+  .feed .line{padding:4px 6px;border-bottom:1px dashed #232745;color:#cfd2e6}
+  .feed .line:last-child{border-bottom:0}
+  .feed .t{color:var(--mut);margin-right:8px}
+  .err{color:var(--bad);background:#2a1620;border:1px solid #4a2230;padding:8px 10px;border-radius:7px;margin-top:10px;font-size:12px}
+  .ok-msg{color:var(--ok);font-size:12px;margin-top:8px}
+  .checks{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px}
+  .checks label{display:inline-flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)}
+  .footer{color:var(--mut);font-size:11px;margin-top:18px;text-align:center}
+  .kbd{font-family:var(--font);background:#21243a;border:1px solid var(--line);padding:1px 6px;border-radius:4px;font-size:11px;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class=\"wrap\">
+
+  <h1 data-testid=\"title\"><span id=\"dot\" class=\"dot\"></span>Dispatcher</h1>
+  <div class=\"sub\">
+    <span class=\"pill\" id=\"botName\" data-testid=\"bot-name\">offline</span>
+    <span class=\"pill\" id=\"armPill\" data-testid=\"arm-pill\">idle</span>
+    <span class=\"pill\" id=\"progPill\" data-testid=\"progress-pill\">0 / 0</span>
+    <span class=\"pill\" id=\"updPill\" data-testid=\"updated-pill\">—</span>
+  </div>
+
+  <div class=\"grid\">
+
+    <!-- LEFT: config + files -->
+    <div>
+      <div class=\"card\">
+        <h2>Configuration</h2>
+
+        <label>Channel ID</label>
+        <input id=\"channel_id\" type=\"text\" placeholder=\"numeric channel id\" data-testid=\"channel-id-input\">
+
+        <div class=\"row\">
+          <div>
+            <label>Delay min (s)</label>
+            <input id=\"delay_min\" type=\"number\" step=\"0.1\" min=\"1\" data-testid=\"delay-min-input\">
+          </div>
+          <div>
+            <label>Delay max (s)</label>
+            <input id=\"delay_max\" type=\"number\" step=\"0.1\" min=\"1\" data-testid=\"delay-max-input\">
+          </div>
+        </div>
+
+        <div class=\"checks\">
+          <label><input id=\"loop\" type=\"checkbox\" data-testid=\"loop-checkbox\"> Loop file</label>
+          <label><input id=\"feed\" type=\"checkbox\" data-testid=\"feed-checkbox\"> Live feed</label>
+        </div>
+
+        <div style=\"margin-top:14px;display:flex;gap:10px;flex-wrap:wrap\">
+          <button class=\"primary\" id=\"saveCfg\" data-testid=\"save-config-btn\">Save config</button>
+          <button class=\"ok\" id=\"startBtn\" data-testid=\"start-btn\">Start</button>
+          <button class=\"danger\" id=\"stopBtn\" data-testid=\"stop-btn\">Stop</button>
+        </div>
+        <div id=\"cfgMsg\"></div>
+      </div>
+
+      <div class=\"card\">
+        <h2>Message files</h2>
+        <div class=\"files\" id=\"fileList\" data-testid=\"file-list\"></div>
+
+        <div class=\"row\" style=\"margin-top:12px\">
+          <input id=\"newName\" type=\"text\" placeholder=\"new-file.txt\" data-testid=\"new-file-name\">
+          <button id=\"newBtn\" data-testid=\"new-file-btn\">Create</button>
+        </div>
+
+        <label style=\"margin-top:14px\">Upload .txt</label>
+        <input id=\"uploader\" type=\"file\" accept=\".txt\" data-testid=\"file-uploader\">
+      </div>
+    </div>
+
+    <!-- RIGHT: editor + feed -->
+    <div>
+      <div class=\"card\">
+        <h2>Editor — <span id=\"editName\" style=\"color:var(--ink)\">(no file)</span></h2>
+        <textarea id=\"editor\" placeholder=\"one message per line…\" data-testid=\"editor\"></textarea>
+        <div style=\"display:flex;gap:10px;margin-top:10px;flex-wrap:wrap\">
+          <button class=\"primary\" id=\"saveFile\" data-testid=\"save-file-btn\">Save file</button>
+          <button id=\"setActive\" data-testid=\"set-active-btn\">Set as active</button>
+          <button class=\"danger\" id=\"delFile\" data-testid=\"delete-file-btn\">Delete</button>
+        </div>
+        <div id=\"editMsg\"></div>
+      </div>
+
+      <div class=\"card\">
+        <h2>Live feed</h2>
+        <div class=\"feed\" id=\"feed\" data-testid=\"feed\"></div>
+        <div id=\"errBox\"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class=\"footer\">
+    Render keep-alive: ping <span class=\"kbd\">/ping</span> with UptimeRobot every ~5&nbsp;min.
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let currentFile = null;
+let activeFile  = null;
+
+async function jget(u){ const r = await fetch(u); return r.json(); }
+async function jpost(u, body){
+  const r = await fetch(u, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+  return r.json();
+}
+async function jdel(u){
+  const r = await fetch(u, {method:'DELETE'});
+  return r.json();
+}
+
+function toast(el, msg, cls){
+  el.innerHTML = `<div class=\"${cls||'ok-msg'}\">${msg}</div>`;
+  setTimeout(()=>{el.innerHTML=''}, 2500);
+}
+
+async function loadConfig(){
+  const cfg = await jget('/api/config');
+  $('channel_id').value = cfg.channel_id ?? '';
+  $('delay_min').value  = cfg.delay_min;
+  $('delay_max').value  = cfg.delay_max;
+  $('loop').checked     = !!cfg.loop;
+  $('feed').checked     = !!cfg.feed;
+  activeFile = cfg.active_file;
+  return cfg;
+}
+
+async function loadFiles(){
+  const {files} = await jget('/api/files');
+  const list = $('fileList');
+  list.innerHTML = '';
+  if(!files.length){
+    list.innerHTML = '<div style=\"padding:10px;color:var(--mut)\">no files yet — create or upload one →</div>';
+    return;
+  }
+  for(const f of files){
+    const row = document.createElement('div');
+    row.className = 'file' + (f.name === activeFile ? ' active' : '') + (f.name === currentFile ? ' active' : '');
+    row.innerHTML = `<span>${f.name} ${f.name===activeFile?'<span class=\"pill on\">active</span>':''}</span><small>${f.lines} lines</small>`;
+    row.onclick = () => openFile(f.name);
+    row.dataset.testid = `file-${f.name}`;
+    list.appendChild(row);
+  }
+}
+
+async function openFile(name){
+  currentFile = name;
+  const f = await jget('/api/file/' + encodeURIComponent(name));
+  $('editName').textContent = name;
+  $('editor').value = f.content;
+  loadFiles();
+}
+
+async function refreshStatus(){
+  const s = await jget('/api/status');
+  const dot = $('dot');
+  dot.className = 'dot' + (s.connected ? ' on' : '');
+  $('botName').textContent = s.bot_name || 'offline';
+  $('botName').className   = 'pill' + (s.connected ? ' on' : ' bad');
+  $('armPill').textContent = s.running ? 'armed' : 'idle';
+  $('armPill').className   = 'pill' + (s.running ? ' on' : '');
+  $('progPill').textContent = (s.index||0) + ' / ' + (s.total||0) + (s.active_file ? ' · ' + s.active_file : '');
+  $('updPill').textContent  = s.updated || '—';
+
+  const feed = $('feed');
+  feed.innerHTML = '';
+  (s.feed || []).slice().reverse().forEach(it => {
+    const d = document.createElement('div');
+    d.className = 'line';
+    d.innerHTML = `<span class=\"t\">${it.t}</span>${escapeHtml(it.text)}`;
+    feed.appendChild(d);
+  });
+  $('errBox').innerHTML = s.error ? `<div class=\"err\">${escapeHtml(s.error)}</div>` : '';
+}
+
+function escapeHtml(s){return (s||'').replace(/[&<>\"']/g, c=>({\"&\":\"&amp;\",\"<\":\"&lt;\",\">\":\"&gt;\",'\"':\"&quot;\",\"'\":\"&#39;\"}[c]))}
+
+// --- handlers
+$('saveCfg').onclick = async () => {
+  const body = {
+    channel_id: $('channel_id').value.trim(),
+    delay_min:  parseFloat($('delay_min').value),
+    delay_max:  parseFloat($('delay_max').value),
+    loop: $('loop').checked,
+    feed: $('feed').checked,
+  };
+  await jpost('/api/config', body);
+  toast($('cfgMsg'), 'saved');
+};
+
+$('startBtn').onclick = async () => {
+  const r = await jpost('/api/control', {action:'start'});
+  if(!r.ok) toast($('cfgMsg'), r.error || 'failed', 'err');
+  else      toast($('cfgMsg'), 'armed', 'ok-msg');
+};
+$('stopBtn').onclick = async () => {
+  await jpost('/api/control', {action:'stop'});
+  toast($('cfgMsg'), 'stopped', 'ok-msg');
+};
+
+$('newBtn').onclick = async () => {
+  const n = $('newName').value.trim();
+  if(!n) return;
+  await jpost('/api/file/' + encodeURIComponent(n), {content:''});
+  $('newName').value = '';
+  await loadFiles();
+  openFile(n.endsWith('.txt') ? n : n + '.txt');
+};
+
+$('uploader').onchange = async (e) => {
+  const f = e.target.files[0]; if(!f) return;
+  const fd = new FormData(); fd.append('file', f);
+  await fetch('/api/upload', {method:'POST', body:fd});
+  e.target.value = '';
+  loadFiles();
+};
+
+$('saveFile').onclick = async () => {
+  if(!currentFile) return toast($('editMsg'), 'no file open', 'err');
+  await jpost('/api/file/' + encodeURIComponent(currentFile), {content: $('editor').value});
+  toast($('editMsg'), 'saved');
+  loadFiles();
+};
+
+$('setActive').onclick = async () => {
+  if(!currentFile) return;
+  await jpost('/api/config', {active_file: currentFile});
+  await loadConfig();
+  await loadFiles();
+  toast($('editMsg'), 'active set to ' + currentFile);
+};
+
+$('delFile').onclick = async () => {
+  if(!currentFile) return;
+  if(!confirm('Delete ' + currentFile + '?')) return;
+  await jdel('/api/file/' + encodeURIComponent(currentFile));
+  currentFile = null;
+  $('editName').textContent = '(no file)';
+  $('editor').value = '';
+  await loadConfig();
+  await loadFiles();
+};
+
+(async function init(){
+  await loadConfig();
+  await loadFiles();
+  refreshStatus();
+  setInterval(refreshStatus, 1500);
+})();
+</script>
+</body>
+</html>
