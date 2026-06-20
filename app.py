@@ -56,6 +56,7 @@ DEFAULT_CONFIG = {
     "loop": True,
     "running": False,
     "feed": True,
+    "autostart": False,
 }
 
 
@@ -227,10 +228,11 @@ class DispatcherCog(commands.Cog):
 # =========================================================================
 class SelfBot(commands.Bot):
     def __init__(self):
-        # discord.py-self requires command_prefix even for self_bots
-        # We use a prefix that nobody will type, effectively disabling commands
+        # discord.py-self requires command_prefix even for self_bots.
+        # "\\" is a single backslash character — nobody starts a message
+        # with it, so prefix commands are effectively disabled.
         super().__init__(
-            command_prefix="\\\",  # impossible prefix = no commands
+            command_prefix="\\",  # single backslash prefix = no commands
             self_bot=True,
         )
 
@@ -535,6 +537,10 @@ DASHBOARD_HTML = """
                         <input type="checkbox" id="feed-check" checked>
                         <span>Feed</span>
                     </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="autostart-check">
+                        <span>Auto-start</span>
+                    </label>
                 </div>
                 <button class="btn btn-primary" style="width: 100%; margin-top: 15px;" onclick="saveConfig()">💾 Save Config</button>
             </div>
@@ -606,6 +612,7 @@ DASHBOARD_HTML = """
                 document.getElementById('delay-max').value = config.delay_max;
                 document.getElementById('loop-check').checked = config.loop;
                 document.getElementById('feed-check').checked = config.feed;
+                document.getElementById('autostart-check').checked = config.autostart;
             } catch (e) { console.error('fetchConfig:', e); }
         }
 
@@ -738,6 +745,7 @@ DASHBOARD_HTML = """
                 delay_max: parseFloat(document.getElementById('delay-max').value),
                 loop: document.getElementById('loop-check').checked,
                 feed: document.getElementById('feed-check').checked,
+                autostart: document.getElementById('autostart-check').checked,
             };
             if (activeFile) payload.active_file = activeFile;
 
@@ -898,7 +906,7 @@ def api_config_set():
             cfg[key] = max(1.0, float(data[key]))
     if cfg["delay_max"] < cfg["delay_min"]:
         cfg["delay_max"] = cfg["delay_min"]
-    for key in ("loop", "feed"):
+    for key in ("loop", "feed", "autostart"):
         if key in data:
             cfg[key] = bool(data[key])
     write_config(cfg)
@@ -932,7 +940,9 @@ def api_status():
 #  Boot
 # =========================================================================
 def run_flask():
-    app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
+    port = int(os.getenv("PORT", "5000"))
+    host = os.getenv("HOST", "127.0.0.1")
+    app.run(host=host, port=port, debug=False, use_reloader=False)
 
 
 def main():
@@ -943,9 +953,19 @@ def main():
     if not CONFIG.exists():
         write_config(dict(DEFAULT_CONFIG))
 
+    # Auto-start: if enabled and prerequisites are set, begin posting on boot.
+    # Re-applies on every process start (e.g. after a Render restart), so the
+    # bot resumes by itself. A manual Stop during a session still sticks,
+    # because this runs once at boot — not on reconnects.
+    cfg = read_config()
+    if cfg.get("autostart") and cfg.get("active_file") and cfg.get("channel_id"):
+        cfg["running"] = True
+        write_config(cfg)
+        print("Auto-start enabled — posting begins once connected.")
+
     threading.Thread(target=run_flask, daemon=True).start()
     print("=" * 50)
-    print("Dashboard: http://127.0.0.1:5000")
+    print(f"Dashboard: http://127.0.0.1:{os.getenv('PORT', '5000')}")
     print("=" * 50)
 
     bot = SelfBot()
