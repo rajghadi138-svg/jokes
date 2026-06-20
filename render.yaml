@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: dispatcher
+    env: python
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false           # set this manually in the Render dashboard
+      - key: PYTHON_VERSION
+        value: \"3.11.9\"
+    healthCheckPath: /ping
+    autoDeploy: true
