@@ -223,12 +223,14 @@ class DispatcherCog(commands.Cog):
 
 
 # =========================================================================
-#  Self-Bot class — NO command prefix, NO commands at all
+#  Self-Bot class — prefix required by discord.py-self but we ignore it
 # =========================================================================
 class SelfBot(commands.Bot):
     def __init__(self):
-        # No command_prefix = no prefix commands at all
+        # discord.py-self requires command_prefix even for self_bots
+        # We use a prefix that nobody will type, effectively disabling commands
         super().__init__(
+            command_prefix="\\\",  # impossible prefix = no commands
             self_bot=True,
         )
 
