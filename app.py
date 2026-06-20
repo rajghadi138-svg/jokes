@@ -31,13 +31,14 @@ import sys
 import json
 import time
 import random
+import secrets
 import threading
 from pathlib import Path
 from datetime import datetime
 
 import discord
 from discord.ext import commands, tasks
-from flask import Flask, request, jsonify, render_template_string, abort
+from flask import Flask, request, jsonify, render_template_string, abort, Response
 
 # ---- paths --------------------------------------------------------------
 BASE      = Path(__file__).resolve().parent
@@ -832,6 +833,32 @@ DASHBOARD_HTML = """
 # =========================================================================
 app = Flask(__name__)
 
+# Optional auth gate — protects the panel + API when exposed publicly (e.g. on
+# Render). Set DASHBOARD_PASSWORD to enable it; leave it unset for an open panel
+# (fine for local dev). /healthz stays open so uptime monitors can ping it.
+DASH_PASSWORD = os.getenv("DASHBOARD_PASSWORD")
+
+
+@app.before_request
+def _require_auth():
+    if request.path == "/healthz":
+        return  # keep-alive / health check — always open
+    if not DASH_PASSWORD:
+        return  # auth disabled
+    auth = request.authorization
+    if auth and secrets.compare_digest(auth.password or "", DASH_PASSWORD):
+        return  # authorized
+    return Response(
+        "Authentication required.",
+        401,
+        {"WWW-Authenticate": 'Basic realm="Dispatcher"'},
+    )
+
+
+@app.get("/healthz")
+def healthz():
+    return "ok", 200
+
 
 @app.get("/")
 def index():
@@ -941,7 +968,7 @@ def api_status():
 # =========================================================================
 def run_flask():
     port = int(os.getenv("PORT", "5000"))
-    host = os.getenv("HOST", "127.0.0.1")
+    host = os.getenv("HOST", "0.0.0.0")  # 0.0.0.0 so Render can detect the port
     app.run(host=host, port=port, debug=False, use_reloader=False)
 
 
@@ -964,8 +991,13 @@ def main():
         print("Auto-start enabled — posting begins once connected.")
 
     threading.Thread(target=run_flask, daemon=True).start()
+    port = os.getenv("PORT", "5000")
     print("=" * 50)
-    print(f"Dashboard: http://127.0.0.1:{os.getenv('PORT', '5000')}")
+    print(f"Dashboard listening on 0.0.0.0:{port}")
+    if DASH_PASSWORD:
+        print("Dashboard auth: ENABLED (DASHBOARD_PASSWORD is set)")
+    else:
+        print("Dashboard auth: OFF — set DASHBOARD_PASSWORD to lock it down")
     print("=" * 50)
 
     bot = SelfBot()
