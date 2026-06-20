@@ -14,7 +14,7 @@ channel and delay, arm / disarm posting, toggle the feed.
 Setup:
     python -m venv .venv
     source .venv/bin/activate.fish  # or .venv/bin/activate
-    pip install -U "discord.py>=2.3" flask
+    pip install -U discord.py-self flask
 
     # Get your user token (BROWSER METHOD - use at your own risk):
     # 1. Open Discord in browser
@@ -105,11 +105,12 @@ def load_lines(filename: str) -> list[str]:
 
 
 # =========================================================================
-#  Self-Bot Cog
+#  Self-Bot Cog — NO prefix commands, dashboard-only control
 # =========================================================================
 class DispatcherCog(commands.Cog):
     """
     Self-bot cog that handles the auto-poster loop.
+    NO prefix commands — everything controlled via the web dashboard.
     """
     FEED_CAP = 40
 
@@ -220,67 +221,14 @@ class DispatcherCog(commands.Cog):
     async def before_poster(self):
         await self.bot.wait_until_ready()
 
-    @commands.command(name="status")
-    async def status_cmd(self, ctx: commands.Context):
-        if ctx.author != self.bot.user:
-            return
-        cfg = read_config()
-        embed = discord.Embed(title="Dispatcher Status", color=0x3498db)
-        embed.add_field(name="Running", value="✅ Yes" if cfg["running"] else "❌ No", inline=True)
-        embed.add_field(name="Active File", value=self._active_file or "None", inline=True)
-        embed.add_field(name="Progress", value=f"{self._index}/{len(self._messages)}", inline=True)
-        embed.add_field(name="Channel", value=f"<#{cfg['channel_id']}>" if cfg["channel_id"] else "None", inline=True)
-        if self._error:
-            embed.add_field(name="Error", value=self._error, inline=False)
-        await ctx.send(embed=embed, delete_after=10)
-
-    @commands.command(name="arm")
-    async def arm_cmd(self, ctx: commands.Context):
-        if ctx.author != self.bot.user:
-            return
-        cfg = read_config()
-        if not cfg["active_file"]:
-            await ctx.send("❌ No active file set.", delete_after=5)
-            return
-        if not cfg["channel_id"]:
-            await ctx.send("❌ No channel ID set.", delete_after=5)
-            return
-        cfg["running"] = True
-        write_config(cfg)
-        await ctx.send("✅ Poster armed.", delete_after=5)
-
-    @commands.command(name="disarm")
-    async def disarm_cmd(self, ctx: commands.Context):
-        if ctx.author != self.bot.user:
-            return
-        cfg = read_config()
-        cfg["running"] = False
-        write_config(cfg)
-        await ctx.send("✅ Poster disarmed.", delete_after=5)
-
-    @commands.command(name="skip")
-    async def skip_cmd(self, ctx: commands.Context):
-        if ctx.author != self.bot.user:
-            return
-        if self._index < len(self._messages) - 1:
-            self._index += 1
-            self._next_at = time.monotonic()
-            self.push_status()
-            await ctx.send(f"⏭️ Skipped. Next: `{self._messages[self._index][:100]}`", delete_after=5)
-        else:
-            await ctx.send("⚠️ Already at last line.", delete_after=5)
-
 
 # =========================================================================
-#  Self-Bot class
+#  Self-Bot class — NO command prefix, NO commands at all
 # =========================================================================
 class SelfBot(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.default()
+        # No command_prefix = no prefix commands at all
         super().__init__(
-            command_prefix="!",
-            intents=intents,
-            help_command=None,
             self_bot=True,
         )
 
@@ -531,7 +479,6 @@ DASHBOARD_HTML = """
         </header>
 
         <div class="grid">
-            <!-- Status Card -->
             <div class="card">
                 <h2>
                     Status
@@ -561,7 +508,6 @@ DASHBOARD_HTML = """
                 </div>
             </div>
 
-            <!-- Config Card -->
             <div class="card">
                 <h2>⚙️ Configuration</h2>
                 <div class="form-group">
@@ -593,7 +539,6 @@ DASHBOARD_HTML = """
         </div>
 
         <div class="grid">
-            <!-- Files Card -->
             <div class="card">
                 <h2>📁 Message Files</h2>
                 <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
@@ -608,7 +553,6 @@ DASHBOARD_HTML = """
                 </div>
             </div>
 
-            <!-- Editor Card -->
             <div class="card" id="editor-card" style="display: none;">
                 <h2>✏️ Editor: <span id="editor-filename">untitled.txt</span></h2>
                 <textarea id="editor-content" placeholder="Enter your messages here, one per line..."></textarea>
@@ -620,7 +564,6 @@ DASHBOARD_HTML = """
                 </div>
             </div>
 
-            <!-- Feed Card -->
             <div class="card">
                 <h2>📡 Live Feed</h2>
                 <div class="feed" id="feed">
@@ -635,7 +578,6 @@ DASHBOARD_HTML = """
         let files = [];
         let config = {};
 
-        // Poll status every second
         setInterval(fetchStatus, 1000);
         setInterval(fetchFiles, 5000);
         fetchStatus();
@@ -701,7 +643,6 @@ DASHBOARD_HTML = """
                 errBox.classList.add('hidden');
             }
 
-            // Update feed
             const feedEl = document.getElementById('feed');
             if (data.feed && data.feed.length > 0) {
                 feedEl.innerHTML = data.feed.slice().reverse().map(item => `
@@ -714,7 +655,6 @@ DASHBOARD_HTML = """
                 feedEl.innerHTML = '<p class="feed-empty">No messages sent yet.</p>';
             }
 
-            // Update active file highlight
             if (data.active_file) {
                 document.querySelectorAll('.file-item').forEach(el => {
                     el.classList.toggle('active', el.dataset.name === data.active_file);
@@ -856,7 +796,6 @@ DASHBOARD_HTML = """
             return div.innerHTML;
         }
 
-        // Drag & drop
         const dropZone = document.getElementById('drop-zone');
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
@@ -997,7 +936,7 @@ def run_flask():
 def main():
     token = os.getenv("DISCORD_TOKEN")
     if not token:
-        sys.exit('Set DISCORD_TOKEN.  fish:  set -x DISCORD_TOKEN "your_user_token"')
+        sys.exit('Set DISCORD_TOKEN.  fish:  set -x DISCORD_TOKEN "your_token"')
 
     if not CONFIG.exists():
         write_config(dict(DEFAULT_CONFIG))
