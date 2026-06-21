@@ -1,31 +1,3 @@
-#!/usr/bin/env python3
-"""
-Dispatcher — Discord self-bot auto-poster with a built-in web control panel.
-
-⚠️  WARNING: Self-bots violate Discord's Terms of Service.
-    Using your user token can result in a permanent account ban.
-    Only use this on servers you own, and understand the risks.
-
-A self-bot that posts lines from a text file into a configured channel,
-paced by a random delay. Everything is controlled from a local web dashboard:
-upload / edit / create message files, pick which file is active, set the
-channel and delay, arm / disarm posting, toggle the feed.
-
-Setup:
-    python -m venv .venv
-    source .venv/bin/activate.fish  # or .venv/bin/activate
-    pip install -U discord.py-self flask
-
-    # Get your user token (BROWSER METHOD - use at your own risk):
-    # 1. Open Discord in browser
-    # 2. Press F12 → Application → Local Storage → discord.com
-    # 3. Copy the "token" value
-    # set -x DISCORD_TOKEN "your_user_token"
-
-Run:
-    python app.py
-    # open http://127.0.0.1:5000
-"""
 import os
 import sys
 import json
